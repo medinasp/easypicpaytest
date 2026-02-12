@@ -6,29 +6,18 @@ namespace EasyPicPay.Models;
 
 public sealed record WalletEntity
 {
-    [Key]
     public Guid Id { get; private set; }
     
-    [Required]
-    [MaxLength(255)]
     public string Name { get; private set; }
     
-    [Required]
-    [MaxLength(14)]    
     public string IdTaxDoc { get; private set; }
     
-    [Required]
-    [EmailAddress]
-    [MaxLength(255)]
     public string Email { get; private set; }
     
-    [Required]
     public string PasswordHash { get; private set; }
     
-    [Required]
     public UserType UserType { get; private set; }
     
-    [Column(TypeName = "decimal(18,2)")]
     public decimal Balance { get; private set; }
     
     public DateTime CreatedAt { get; private set; }

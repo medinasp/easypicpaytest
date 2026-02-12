@@ -1,38 +1,25 @@
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 using EasyPicPay.Models.Enums;
 
 namespace EasyPicPay.Models;
 
-public class Transaction
+public class TransactionEntity
 {
-    [Key]
     public Guid Id { get; private set; }
     
-    [Required]
     public Guid PayerId { get; private set; }
     
-    [Required]
     public Guid PayeeId { get; private set; }
     
-    [Required]
-    [Column(TypeName = "decimal(18,2)")]
-    [Range(0.01, double.MaxValue)]
     public decimal Amount { get; private set; }
     
-    [Required]
-    [MaxLength(20)]
-    public string Status { get; private set; } = TransactionStatus.Pending.ToString();
+    public string Status { get; private set; } = nameof(TransactionStatus.Pending);
     
-    [MaxLength(100)]
     public string? AuthorizationCode { get; private set; }
     
     public bool NotificationSent { get; private set; }
     
-    [MaxLength(500)]
     public string? FailureReason { get; private set; }
     
-    [Required]
     public DateTime CreatedAt { get; private set; }
     
     public DateTime? UpdatedAt { get; private set; }
@@ -41,16 +28,16 @@ public class Transaction
     public WalletEntity? Payee { get; private set; }
     
     // Construtor privado para EF Core
-    private Transaction() { }
+    private TransactionEntity() { }
     
     // Construtor principal
-    public Transaction(Guid payerId, Guid payeeId, decimal amount)
+    public TransactionEntity(Guid payerId, Guid payeeId, decimal amount)
     {
         Id = Guid.NewGuid();
         PayerId = payerId;
         PayeeId = payeeId;
         Amount = amount;
-        Status = TransactionStatus.Pending.ToString();
+        Status = nameof(TransactionStatus.Pending);
         CreatedAt = DateTime.UtcNow;
         
         Validate();
@@ -74,20 +61,20 @@ public class Transaction
     // Métodos de domínio
     public void Complete(string authorizationCode)
     {
-        if (Status != TransactionStatus.Pending.ToString())
+        if (Status != nameof(TransactionStatus.Pending))
             throw new InvalidOperationException($"Transação não está pendente. Status atual: {Status}");
             
-        Status = TransactionStatus.Completed.ToString();
+        Status = nameof(TransactionStatus.Completed);
         AuthorizationCode = authorizationCode;
         UpdatedAt = DateTime.UtcNow;
     }
     
     public void Fail(string reason)
     {
-        if (Status != TransactionStatus.Pending.ToString())
+        if (Status != nameof(TransactionStatus.Pending))
             throw new InvalidOperationException($"Transação não está pendente. Status atual: {Status}");
             
-        Status = TransactionStatus.Failed.ToString();
+        Status = nameof(TransactionStatus.Failed);
         FailureReason = reason;
         UpdatedAt = DateTime.UtcNow;
     }
