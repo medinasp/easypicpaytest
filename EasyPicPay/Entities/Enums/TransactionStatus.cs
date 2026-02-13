@@ -1,4 +1,4 @@
-namespace EasyPicPay.Models.Enums;
+namespace EasyPicPay.Entities.Enums;
 
 public enum TransactionStatus
 {

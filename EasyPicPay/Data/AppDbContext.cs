@@ -1,4 +1,4 @@
-using EasyPicPay.Models;
+using EasyPicPay.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace EasyPicPay.Data;
@@ -16,8 +16,6 @@ public class AppDbContext : DbContext
         
         modelBuilder.Entity<WalletEntity>(entity =>
         {
-            entity.HasKey(e => e.Id);
-            
             entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
             entity.HasIndex(e => e.Email).IsUnique();
             
@@ -35,8 +33,6 @@ public class AppDbContext : DbContext
             
         modelBuilder.Entity<TransactionEntity>(entity =>
         {
-            entity.HasKey(e => e.Id);
-            
             entity.HasIndex(e => e.PayerId);
             
             entity.HasIndex(e => e.PayeeId);

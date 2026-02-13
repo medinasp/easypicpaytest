@@ -1,11 +1,10 @@
-using EasyPicPay.Models.Enums;
+using EasyPicPay.Entities.Enums;
+using EasyPicPay.Entities.EntityBase;
 
-namespace EasyPicPay.Models;
+namespace EasyPicPay.Entities;
 
-public class TransactionEntity
+public class TransactionEntity : BaseEntity
 {
-    public Guid Id { get; private set; }
-    
     public Guid PayerId { get; private set; }
     
     public Guid PayeeId { get; private set; }
@@ -19,8 +18,6 @@ public class TransactionEntity
     public bool NotificationSent { get; private set; }
     
     public string? FailureReason { get; private set; }
-    
-    public DateTime CreatedAt { get; private set; }
     
     public DateTime? UpdatedAt { get; private set; }
     

@@ -1,5 +1,5 @@
-using EasyPicPay.Models;
-using EasyPicPay.Models.Enums;
+using EasyPicPay.Entities;
+using EasyPicPay.Entities.Enums;
 
 namespace EasyPicPay.Application.Interfaces;
 

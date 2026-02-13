@@ -1,4 +1,4 @@
-using EasyPicPay.Models;
+using EasyPicPay.Entities;
 
 namespace EasyPicPay.Application.Interfaces;
 

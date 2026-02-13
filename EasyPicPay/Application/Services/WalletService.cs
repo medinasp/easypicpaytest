@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using EasyPicPay.Application.Interfaces;
 using EasyPicPay.Data;
-using EasyPicPay.Models;
-using EasyPicPay.Models.Enums;
+using EasyPicPay.Entities;
+using EasyPicPay.Entities.Enums;
 using EasyPicPay.Exceptions;
 
 namespace EasyPicPay.Application.Services;

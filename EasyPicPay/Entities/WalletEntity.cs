@@ -1,13 +1,10 @@
-using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using EasyPicPay.Models.Enums;
+using EasyPicPay.Entities.Enums;
+using EasyPicPay.Entities.EntityBase;
     
-namespace EasyPicPay.Models;
+namespace EasyPicPay.Entities;
 
-public sealed record WalletEntity
+public class WalletEntity : BaseEntity
 {
-    public Guid Id { get; private set; }
-    
     public string Name { get; private set; }
     
     public string IdTaxDoc { get; private set; }
@@ -20,21 +17,17 @@ public sealed record WalletEntity
     
     public decimal Balance { get; private set; }
     
-    public DateTime CreatedAt { get; private set; }
-    
     private WalletEntity(){}
 
     public WalletEntity(string name, string cpfCnpj, string email, 
         string passwordHash, UserType userType)
     {
-        Id = Guid.NewGuid();
         Name = name;
         IdTaxDoc = cpfCnpj;
         Email = email;
         PasswordHash = passwordHash;
         UserType = userType;
         Balance = 0;
-        CreatedAt = DateTime.UtcNow;
         
         Validate();
     }
