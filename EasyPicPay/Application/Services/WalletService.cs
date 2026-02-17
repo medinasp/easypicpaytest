@@ -3,7 +3,7 @@ using EasyPicPay.Application.Interfaces;
 using EasyPicPay.Data;
 using EasyPicPay.Entities;
 using EasyPicPay.Entities.Enums;
-using EasyPicPay.Exceptions;
+using EasyPicPay.Application.Exceptions;
 
 namespace EasyPicPay.Application.Services;
 

@@ -1,4 +1,4 @@
-namespace EasyPicPay.Exceptions;
+namespace EasyPicPay.Application.Exceptions;
 
 public class BusinessException : Exception
 {
