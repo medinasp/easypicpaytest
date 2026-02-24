@@ -1,4 +1,4 @@
-namespace EasyPicPay.Application.DTOs.Responses;
+namespace EasyPicPay.Web.ViewModels.Responses;
 
 public record CreateWalletResponse
 {

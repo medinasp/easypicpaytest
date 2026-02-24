@@ -1,4 +1,4 @@
-namespace EasyPicPay.Application.DTOs;
+namespace EasyPicPay.Web.ViewModels;
 
 public record TransactionDto(
     Guid Id,

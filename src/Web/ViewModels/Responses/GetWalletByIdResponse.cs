@@ -1,6 +1,6 @@
 using EasyPicPay.Entities.Enums;
 
-namespace EasyPicPay.Application.DTOs.Responses;
+namespace EasyPicPay.Web.ViewModels.Responses;
 
 public record GetWalletByIdResponse
 {

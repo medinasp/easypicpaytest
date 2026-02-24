@@ -1,13 +1,15 @@
-using EasyPicPay.Application.DTOs.Requests;
-using EasyPicPay.Application.DTOs.Responses;
+using EasyPicPay.Web.ViewModels.Requests;
+using EasyPicPay.Web.ViewModels.Responses;
 using EasyPicPay.Application.Exceptions;
-using EasyPicPay.Application.Interfaces;   // IWalletService
+using EasyPicPay.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization; // IWalletService
 using Microsoft.AspNetCore.Mvc;
 
 namespace EasyPicPay.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class WalletController : ControllerBase
 {
     private readonly IWalletService _walletService;

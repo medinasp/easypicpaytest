@@ -1,14 +1,16 @@
 using EasyPicPay.Application.Exceptions;
 using EasyPicPay.Application.Interfaces;
-using EasyPicPay.Application.DTOs.Requests;
-using EasyPicPay.Application.DTOs.Responses;
-using EasyPicPay.Application.DTOs;
+using EasyPicPay.Web.ViewModels.Requests;
+using EasyPicPay.Web.ViewModels.Responses;
+using EasyPicPay.Web.ViewModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EasyPicPay.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class TransactionController(
     ITransactionService service,
     ILogger<TransactionController> logger)
