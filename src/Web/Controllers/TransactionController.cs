@@ -10,7 +10,7 @@ namespace EasyPicPay.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+// [Authorize]
 public class TransactionController(
     ITransactionService service,
     ILogger<TransactionController> logger)

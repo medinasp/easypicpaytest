@@ -57,6 +57,12 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();          // cria o banco se não existir e atualiza o schema
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();

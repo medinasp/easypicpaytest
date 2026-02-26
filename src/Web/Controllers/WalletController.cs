@@ -9,7 +9,7 @@ namespace EasyPicPay.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+// [Authorize]
 public class WalletController : ControllerBase
 {
     private readonly IWalletService _walletService;
