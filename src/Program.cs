@@ -66,28 +66,39 @@ using (var scope = app.Services.CreateScope())
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.MapScalarApiReference(options =>
-    {
-        options.WithTitle("EasyPicPay API")
-               .WithTheme(ScalarTheme.DeepSpace)
-                // Outros temas
-                // ScalarTheme.Default
-                // ScalarTheme.Alternative
-                // ScalarTheme.Moon
-                // ScalarTheme.Purple
-                // ScalarTheme.Solarized
-                // ScalarTheme.BluePlanet
-                // ScalarTheme.DeepSpace
-                // ScalarTheme.Saturn
-                // ScalarTheme.Kepler
-                // ScalarTheme.Mars
-                // ScalarTheme.None
-               .WithHttpBearerAuthentication(bearer => { });
-    });
+//     app.MapScalarApiReference(options =>
+//     {
+//         options.WithTitle("EasyPicPay API")
+//                .WithTheme(ScalarTheme.DeepSpace)
+// //                 // Outros temas
+// //                 // ScalarTheme.Default
+// //                 // ScalarTheme.Alternative
+// //                 // ScalarTheme.Moon
+// //                 // ScalarTheme.Purple
+// //                 // ScalarTheme.Solarized
+// //                 // ScalarTheme.BluePlanet
+// //                 // ScalarTheme.DeepSpace
+// //                 // ScalarTheme.Saturn
+// //                 // ScalarTheme.Kepler
+// //                 // ScalarTheme.Mars
+// //                 // ScalarTheme.None
+//                .WithHttpBearerAuthentication(bearer => { });
+//     });
+
+// app.MapScalarApiReference(options =>
+// {
+//     options.WithTitle("EasyPicPay API")
+//            .WithTheme(ScalarTheme.DeepSpace)
+//            .AddHttpAuthentication("Bearer", scheme => { });
+// });
 }
 
-app.UseHttpsRedirection();
-app.UseRouting();
+// app.UseHttpsRedirection();
+//Por que remover no Docker? Porque seu container está configurado para rodar apenas em HTTP na porta 80 — você não tem certificado SSL configurado no container. Quando o middleware tenta redirecionar para HTTPS e não há nada escutando na porta 443, a requisição morre. Em produção real você resolveria isso com um proxy reverso como Nginx ou Traefik na frente do container, que cuida do SSL externamente.
+
+// app.UseRouting();
+//Por que remover no .NET 10? Porque o MapControllers() já chama o UseRouting() internamente de forma automática quando necessário. Chamá-lo explicitamente antes cria dois pontos de roteamento no pipeline, o que pode causar comportamento imprevisível — requisições sendo avaliadas duas vezes ou middleware de autenticação sendo executado fora de ordem.
+
 app.UseAuthentication();
 app.UseAuthorization();
 

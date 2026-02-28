@@ -44,7 +44,8 @@ services:
         condition: service_healthy
     networks:
       - easypicpay-network
-    restart: unless-stopped
+    # restart: unless-stopped
+    restart: no
     # Opcional: esperar postgres ficar pronto antes de iniciar
     command: >
       sh -c "
