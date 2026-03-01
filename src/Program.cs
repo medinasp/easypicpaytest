@@ -91,7 +91,6 @@ if (app.Environment.IsDevelopment())
 //            .WithTheme(ScalarTheme.DeepSpace)
 //            .AddHttpAuthentication("Bearer", scheme => { });
 // });
-//removido o scalar porque ele não é compatível com o .NET 10, e a documentação oficial do Scalar ainda não foi atualizada para refletir as mudanças no pipeline de middleware do .NET 10. O Scalar depende de pontos específicos no pipeline para funcionar corretamente, e as mudanças no .NET 10 podem ter quebrado essa compatibilidade. Até que o Scalar seja atualizado para suportar o .NET 10, é melhor removê-lo para evitar problemas de compatibilidade.
 }
 
 // app.UseHttpsRedirection();
