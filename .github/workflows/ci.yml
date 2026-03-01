@@ -1,0 +1,123 @@
+name: CI Pipeline
+
+# ────────────────────────────────────────────────────────────
+# 📍 EVENTOS QUE DISPARAM O PIPELINE
+# ────────────────────────────────────────────────────────────
+on:
+  # Roda em todo pull request para a main
+  pull_request:
+    branches: [ main ]
+  
+  # Roda após merge na main (para buildar imagem)
+  push:
+    branches: [ main ]
+
+# ────────────────────────────────────────────────────────────
+# 🎯 JOBS DO PIPELINE
+# ────────────────────────────────────────────────────────────
+jobs:
+  # ──────────────────────────────────────────────────────────
+  # JOB 1: BUILD E TESTE (roda em PRs e pushes)
+  # ──────────────────────────────────────────────────────────
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # Baixa o código do repositório
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    # Configura a versão do .NET (ajuste conforme seu projeto)
+    - name: ⚙️ Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'  # Mude para 9.0 se necessário
+    
+    # Restaura pacotes NuGet
+    - name: 📦 Restore dependencies
+      run: dotnet restore EasyPicPay.sln
+    
+    # Compila o projeto em modo Release
+    - name: 🔨 Build
+      run: dotnet build EasyPicPay.sln --configuration Release --no-restore
+    
+    # Roda os testes (✅ Se falhar, trava o pipeline)
+    - name: 🧪 Run tests
+      run: dotnet test TestEasyPicPay/EasyPicPay.UnitTest.csproj --configuration Release --no-build --verbosity normal
+    
+    # (Opcional) Salva os resultados dos testes como artefato
+    - name: 📊 Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()  # Roda mesmo se os testes falharem
+      with:
+        name: test-results
+        path: TestResults/
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 2: BUILD DA IMAGEM DOCKER (só após merge na main)
+  # ──────────────────────────────────────────────────────────
+  # build-image:
+  #   # Só roda se for push na main E se o job anterior passou
+  #   needs: build-and-test
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   runs-on: ubuntu-latest
+    
+  #   steps:
+  #   - name: 📥 Checkout code
+  #     uses: actions/checkout@v4
+    
+  #   # Login no Docker Hub (segredos configurados no GitHub)
+  #   - name: 🔑 Login to Docker Hub
+  #     uses: docker/login-action@v3
+  #     with:
+  #       username: ${{ secrets.DOCKER_USERNAME }}
+  #       password: ${{ secrets.DOCKER_TOKEN }}
+    
+  #   # Build da imagem (sem push ainda - teste local)
+  #   - name: 🏗️ Build Docker image
+  #     run: |
+  #       docker build -t ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }} .
+    
+  #   # ✅ TESTE DA IMAGEM ANTES DE SUBIR
+  #   # Roda um container temporário e testa se a API sobe
+  #   - name: 🧪 Test Docker image
+  #     run: |
+  #       # Sobe container em background
+  #       docker run -d --name test-api -p 8080:80 ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }}
+  #       sleep 10  # Aguarda API iniciar
+  #       # Testa endpoint (ajuste conforme sua API)
+  #       curl --fail http://localhost:8080/api/wallets || exit 1
+  #       # Se falhar, o pipeline para aqui (não faz push)
+    
+  #   # Só faz push se o teste passou
+  #   - name: 🚀 Push Docker image
+  #     run: |
+  #       docker push ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }}
+  #       # Também atualiza a tag latest
+  #       docker tag ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:latest
+  #       docker push ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:latest
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 3: ROLLBACK AUTOMÁTICO (opcional - avançado)
+  # ──────────────────────────────────────────────────────────
+  # Este job cria um PR de rollback se algo falhar na main
+  # (Descomente se quiser usar)
+  #
+  # create-rollback-pr:
+  #   runs-on: ubuntu-latest
+  #   if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   steps:
+  #   - name: 📥 Checkout code
+  #     uses: actions/checkout@v4
+  #     with:
+  #       fetch-depth: 0
+  #   
+  #   - name: 🔄 Create rollback PR
+  #     uses: peter-evans/create-pull-request@v6
+  #     with:
+  #       token: ${{ secrets.GITHUB_TOKEN }}
+  #       commit-message: "🚑 Rollback para commit anterior"
+  #       title: "🚑 Rollback automático - falha no deploy"
+  #       body: "O deploy falhou. Este PR reverte para o commit anterior."
+  #       branch: rollback-${{ github.sha }}
+  #       base: main
