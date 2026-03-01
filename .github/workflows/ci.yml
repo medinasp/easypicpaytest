@@ -43,7 +43,7 @@ jobs:
     
     # Roda os testes (✅ Se falhar, trava o pipeline)
     - name: 🧪 Run tests
-      run: dotnet test TestEasyPicPay/EasyPicPay.UnitTest.csproj --configuration Release --no-build --verbosity normal
+      run: dotnet test src/TestEasyPicPay/TestEasyPicPay.csproj --configuration Release --no-build --verbosity normal
     
     # (Opcional) Salva os resultados dos testes como artefato
     - name: 📊 Upload test results
