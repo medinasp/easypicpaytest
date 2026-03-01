@@ -1,8 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EasyPicPay", ".\src\EasyPicPay\EasyPicPay.csproj", "{DDE0F2D0-8C8F-4B07-BFF6-C2D72C64AE4C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EasyPicPay", "src\EasyPicPay.csproj", "{DDE0F2D0-8C8F-4B07-BFF6-C2D72C64AE4C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestEasyPicPay", ".\src\TestEasyPicPay\TestEasyPicPay.csproj", "{53586B6D-D71A-4F10-B784-9FB71ACBF0A2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestEasyPicPay", "TestEasyPicPay\TestEasyPicPay.csproj", "{53586B6D-D71A-4F10-B784-9FB71ACBF0A2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

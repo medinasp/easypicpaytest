@@ -22,7 +22,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\EasyPicPay\EasyPicPay.csproj" />
+      <ProjectReference Include="..\src\EasyPicPay.csproj" />
     </ItemGroup>
 
 </Project>
