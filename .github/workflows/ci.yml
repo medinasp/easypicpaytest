@@ -88,60 +88,42 @@ jobs:
     # 🧪 TESTE DA IMAGEM COM BANCO DE DADOS REAL (via service container)
     - name: 🧪 Test image with PostgreSQL
       run: |
-        # Sobe a API
+        # Sobe a API usando network=host (mais confiável)
         docker run -d \
           --name test-api \
-          -p 8080:80 \
+          --network host \
           --add-host host.docker.internal:host-gateway \
           -e ConnectionStrings__DefaultConnection="Host=host.docker.internal;Port=5432;Database=EasyPicPayDB;Username=postgres;Password=root" \
           ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}
         
         echo "Aguardando API iniciar..."
         
-        # Espera até ver "Application started" nos logs
-        for i in {1..60}; do
-          echo -n "."
-          sleep 1
-          
-          if docker logs test-api 2>&1 | grep -q "Application started"; then
-            echo ""
-            echo "✅ API iniciou após $i segundos!"
-            break
-          fi
-          
-          if [ $i -eq 60 ]; then
-            echo ""
-            echo "❌ API não iniciou em 60 segundos"
-            docker logs test-api
-            exit 1
-          fi
-        done
+        # Monitora logs
+        timeout 60 bash -c '
+          while ! docker logs test-api 2>&1 | grep -q "Application started"; do
+            echo -n "."
+            sleep 2
+          done
+        '
         
-        # Aguarda mais 2 segundos para estabilizar
-        sleep 2
+        echo ""
+        echo "✅ API iniciou!"
         
-        # Tenta o endpoint até 5 vezes
-        echo "Testando /api/wallets..."
-        for j in {1..5}; do
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/wallets || echo "000")
-          
-          if [ "$HTTP_CODE" = "000" ]; then
-            echo "Tentativa $j: conexão falhou, aguardando..."
-            sleep 3
-          elif [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 401 ] || [ "$HTTP_CODE" -eq 400 ]; then
-            echo "✅ API respondeu com código $HTTP_CODE na tentativa $j"
-            echo "✅ Teste passou!"
-            exit 0
-          else
-            echo "Tentativa $j: código $HTTP_CODE, aguardando..."
-            sleep 3
-          fi
-        done
+        # Testa no localhost (com network=host, a porta 80 do container é a 80 do host)
+        sleep 3
+        echo "Testando /api/wallets na porta 80..."
         
-        echo "❌ Falha após 5 tentativas"
-        echo "📋 Últimos logs da API:"
-        docker logs test-api --tail 50
-        exit 1
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/wallets || echo "000")
+        
+        if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "400" ]; then
+          echo "✅ API respondeu com código $HTTP_CODE"
+          exit 0
+        else
+          echo "❌ Código $HTTP_CODE"
+          echo "📋 Logs completos:"
+          docker logs test-api
+          exit 1
+        fi
     
     # 🚀 Push da imagem (sempre, tanto PR quanto main)
     - name: 🚀 Push image
