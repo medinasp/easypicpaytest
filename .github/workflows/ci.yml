@@ -88,7 +88,7 @@ jobs:
     # 🧪 TESTE DA IMAGEM COM BANCO DE DADOS REAL (via service container)
     - name: 🧪 Test image with PostgreSQL
       run: |
-        # Sobe a API usando network=host (mais confiável)
+        # Sobe a API usando network=host
         docker run -d \
           --name test-api \
           --network host \
@@ -108,22 +108,27 @@ jobs:
         
         echo ""
         echo "✅ API iniciou!"
-        
-        # Testa no localhost (com network=host, a porta 80 do container é a 80 do host)
         sleep 3
-        echo "Testando /api/wallets na porta 80..."
         
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/wallets || echo "000")
+        # Testa NO IPV4 explícito (127.0.0.1) e com timeout maior
+        echo "Testando /api/wallets em 127.0.0.1:8080..."
         
-        if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "400" ]; then
-          echo "✅ API respondeu com código $HTTP_CODE"
-          exit 0
-        else
-          echo "❌ Código $HTTP_CODE"
-          echo "📋 Logs completos:"
-          docker logs test-api
-          exit 1
-        fi
+        # Primeiro, verifica se a porta está escutando
+        echo "🔍 Verificando portas:"
+        ss -tulpn | grep 8080 || echo "Porta 8080 não encontrada"
+        
+        # Tenta curl com timeout de 10 segundos e opções extras
+        curl -v --connect-timeout 10 --retry 3 --retry-delay 2 http://127.0.0.1:8080/api/wallets || {
+          echo "❌ Falha no curl. Tentando com localhost..."
+          curl -v --connect-timeout 10 http://localhost:8080/api/wallets || {
+            echo "❌ Falha também em localhost."
+            echo "📋 Logs completos:"
+            docker logs test-api
+            exit 1
+          }
+        }
+        
+        echo "✅ Teste passou!"
     
     # 🚀 Push da imagem (sempre, tanto PR quanto main)
     - name: 🚀 Push image
