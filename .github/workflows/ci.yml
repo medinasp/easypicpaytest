@@ -88,7 +88,7 @@ jobs:
     # 🧪 TESTE DA IMAGEM COM BANCO DE DADOS REAL (via service container)
     - name: 🧪 Test image with PostgreSQL
       run: |
-        # Sobe a API conectada ao PostgreSQL do service container
+        # Sobe a API
         docker run -d \
           --name test-api \
           -p 8080:80 \
@@ -97,18 +97,30 @@ jobs:
           ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}
         
         echo "Aguardando API iniciar..."
-        sleep 15
         
-        # Testa endpoint
-        echo "Testando /api/wallets..."
-        curl --fail http://localhost:8080/api/wallets || {
-          echo "❌ Falha no teste. Logs da API:"
-          docker logs test-api
-          docker logs test-api --tail 50
-          exit 1
-        }
+        # Aguarda até 30 segundos com verificações periódicas
+        for i in {1..30}; do
+          echo -n "."
+          sleep 1
+          
+          # Tenta conectar a cada 5 segundos
+          if (( i % 5 == 0 )); then
+            if curl -s http://localhost:8080/api/wallets > /dev/null; then
+              echo ""
+              echo "✅ API respondeu na tentativa $i segundos!"
+              curl --fail http://localhost:8080/api/wallets
+              echo "✅ Teste passou!"
+              exit 0
+            fi
+          fi
+        done
         
-        echo "✅ Imagem testada com sucesso!"
+        # Se chegou aqui, falhou
+        echo ""
+        echo "❌ API não respondeu após 30 segundos"
+        echo "📋 Últimos logs da API:"
+        docker logs test-api --tail 50
+        exit 1
     
     # 🚀 Push da imagem (sempre, tanto PR quanto main)
     - name: 🚀 Push image
