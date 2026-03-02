@@ -1,25 +1,23 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS builder
-WORKDIR /src
-
-COPY ["src/EasyPicPay.csproj", "src/"]
-RUN dotnet restore "src/EasyPicPay.csproj"
-
-COPY src/ src/
-WORKDIR "/src/src"
-RUN dotnet publish "EasyPicPay.csproj" -c Release -o /app/publish
-
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS final
+# Estágio 1: Build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y libgssapi-krb5-2 && \
-    rm -rf /var/lib/apt/lists/*
+# Copia o arquivo de projeto e restaura
+COPY src/EasyPicPay.csproj ./
+RUN dotnet restore
 
+# Copia todo o código fonte
+COPY src/ ./
+
+# Publica a aplicação
+RUN dotnet publish -c Release -o out
+
+# Estágio 2: Runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS runtime
+WORKDIR /app
 EXPOSE 80
 EXPOSE 443
 
-COPY --from=builder /app/publish .
-
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+COPY --from=build /app/out .
 
 ENTRYPOINT ["dotnet", "EasyPicPay.dll"]
