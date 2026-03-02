@@ -27,11 +27,11 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
     
-    # Configura a versão do .NET (ajuste conforme seu projeto)
+    # Configura a versão do .NET
     - name: ⚙️ Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '10.0.x'  # Mude para 9.0 se necessário
+        dotnet-version: '10.0.x'
     
     # Restaura pacotes NuGet
     - name: 📦 Restore dependencies
