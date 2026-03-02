@@ -92,13 +92,14 @@ jobs:
         docker run -d \
           --name test-api \
           -p 8080:80 \
-          -e ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=EasyPicPayDB;Username=postgres;Password=root" \
+          --add-host host.docker.internal:host-gateway \
+          -e ConnectionStrings__DefaultConnection="Host=host.docker.internal;Port=5432;Database=EasyPicPayDB;Username=postgres;Password=root" \
           ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}
         
         echo "Aguardando API iniciar..."
         sleep 15
         
-        # Testa endpoint real (o mesmo que funciona localmente)
+        # Testa endpoint
         echo "Testando /api/wallets..."
         curl --fail http://localhost:8080/api/wallets || {
           echo "❌ Falha no teste. Logs da API:"
