@@ -89,13 +89,13 @@ jobs:
     - name: 🧪 Test image
       run: |
         # Sobe container em background
-        docker run -d --name test-api -p 8080:80 ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}
+        docker run -d --name test-api -p 8081:80 ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}
         
         # Aguarda API iniciar
         sleep 10
         
         # Testa endpoint (ajuste conforme sua API)
-        curl --fail http://localhost:8080/api/wallets || exit 1
+        curl --fail http://localhost:8081/api/wallets || exit 1
         
         # Se chegou aqui, o teste passou!
         echo "✅ Imagem testada com sucesso!"
