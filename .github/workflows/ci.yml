@@ -98,29 +98,49 @@ jobs:
         
         echo "Aguardando API iniciar..."
         
-        # Aguarda até 40 segundos
-        for i in {1..40}; do
+        # Espera até ver "Application started" nos logs
+        for i in {1..60}; do
           echo -n "."
           sleep 1
           
-          # Tenta o endpoint a cada 2 segundos após 10s
-          if (( i > 10 )) && (( i % 2 == 0 )); then
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/wallets | grep -q "200\|401\|400"; then
-              echo ""
-              echo "✅ API respondeu na tentativa $i segundos!"
-              echo "Resposta:"
-              curl -s http://localhost:8080/api/wallets | head -c 200
-              echo ""
-              echo "✅ Teste passou!"
-              exit 0
-            fi
+          if docker logs test-api 2>&1 | grep -q "Application started"; then
+            echo ""
+            echo "✅ API iniciou após $i segundos!"
+            break
+          fi
+          
+          if [ $i -eq 60 ]; then
+            echo ""
+            echo "❌ API não iniciou em 60 segundos"
+            docker logs test-api
+            exit 1
           fi
         done
         
-        echo ""
-        echo "❌ API não respondeu após 40 segundos"
-        echo "📋 Logs completos:"
-        docker logs test-api
+        # Aguarda mais 2 segundos para estabilizar
+        sleep 2
+        
+        # Tenta o endpoint até 5 vezes
+        echo "Testando /api/wallets..."
+        for j in {1..5}; do
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/wallets || echo "000")
+          
+          if [ "$HTTP_CODE" = "000" ]; then
+            echo "Tentativa $j: conexão falhou, aguardando..."
+            sleep 3
+          elif [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 401 ] || [ "$HTTP_CODE" -eq 400 ]; then
+            echo "✅ API respondeu com código $HTTP_CODE na tentativa $j"
+            echo "✅ Teste passou!"
+            exit 0
+          else
+            echo "Tentativa $j: código $HTTP_CODE, aguardando..."
+            sleep 3
+          fi
+        done
+        
+        echo "❌ Falha após 5 tentativas"
+        echo "📋 Últimos logs da API:"
+        docker logs test-api --tail 50
         exit 1
     
     # 🚀 Push da imagem (sempre, tanto PR quanto main)
