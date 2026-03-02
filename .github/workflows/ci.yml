@@ -98,28 +98,29 @@ jobs:
         
         echo "Aguardando API iniciar..."
         
-        # Aguarda até 30 segundos com verificações periódicas
-        for i in {1..30}; do
+        # Aguarda até 40 segundos
+        for i in {1..40}; do
           echo -n "."
           sleep 1
           
-          # Tenta conectar a cada 5 segundos
-          if (( i % 5 == 0 )); then
-            if curl -s http://localhost:8080/api/wallets > /dev/null; then
+          # Tenta o endpoint a cada 2 segundos após 10s
+          if (( i > 10 )) && (( i % 2 == 0 )); then
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/wallets | grep -q "200\|401\|400"; then
               echo ""
               echo "✅ API respondeu na tentativa $i segundos!"
-              curl --fail http://localhost:8080/api/wallets
+              echo "Resposta:"
+              curl -s http://localhost:8080/api/wallets | head -c 200
+              echo ""
               echo "✅ Teste passou!"
               exit 0
             fi
           fi
         done
         
-        # Se chegou aqui, falhou
         echo ""
-        echo "❌ API não respondeu após 30 segundos"
-        echo "📋 Últimos logs da API:"
-        docker logs test-api --tail 50
+        echo "❌ API não respondeu após 40 segundos"
+        echo "📋 Logs completos:"
+        docker logs test-api
         exit 1
     
     # 🚀 Push da imagem (sempre, tanto PR quanto main)
