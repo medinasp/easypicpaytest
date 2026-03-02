@@ -4,11 +4,8 @@ name: CI Pipeline
 # 📍 EVENTOS QUE DISPARAM O PIPELINE
 # ────────────────────────────────────────────────────────────
 on:
-  # Roda em todo pull request para a main
   pull_request:
     branches: [ main ]
-  
-  # Roda após merge na main (para buildar imagem)
   push:
     branches: [ main ]
 
@@ -23,42 +20,45 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    # Baixa o código do repositório
     - name: 📥 Checkout code
       uses: actions/checkout@v4
     
-    # Configura a versão do .NET
     - name: ⚙️ Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '10.0.x'
     
-    # Restaura pacotes NuGet
     - name: 📦 Restore dependencies
       run: dotnet restore EasyPicPay.sln
     
-    # Compila o projeto em modo Release
     - name: 🔨 Build
       run: dotnet build EasyPicPay.sln --configuration Release --no-restore
     
-    # Roda os testes (✅ Se falhar, trava o pipeline)
     - name: 🧪 Run tests
       run: dotnet test src/TestEasyPicPay/TestEasyPicPay.csproj --configuration Release --no-build --verbosity normal
-    
-    # (Opcional) Salva os resultados dos testes como artefato
-    - name: 📊 Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()  # Roda mesmo se os testes falharem
-      with:
-        name: test-results
-        path: TestResults/
 
   # ──────────────────────────────────────────────────────────
-  # JOB 2: BUILD E PUSH DA IMAGEM (só após build-and-test passar)
+  # JOB 2: BUILD, TESTE COM BANCO REAL E PUSH DA IMAGEM
   # ──────────────────────────────────────────────────────────
   build-and-push-image:
     needs: build-and-test
     runs-on: ubuntu-latest
+    
+    # 🚀 SERVICE CONTAINERS - GitHub gerencia o PostgreSQL automaticamente
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: EasyPicPayDB
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     
     steps:
     - name: 📥 Checkout
@@ -85,22 +85,31 @@ jobs:
       run: |
         docker build -t ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }} .
     
-    # Teste rápido da imagem
-    - name: 🧪 Test image
+    # 🧪 TESTE DA IMAGEM COM BANCO DE DADOS REAL (via service container)
+    - name: 🧪 Test image with PostgreSQL
       run: |
-        # Sobe container em background
-        docker run -d --name test-api -p 8081:80 ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}
+        # Sobe a API conectada ao PostgreSQL do service container
+        docker run -d \
+          --name test-api \
+          -p 8080:80 \
+          -e ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=EasyPicPayDB;Username=postgres;Password=root" \
+          ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}
         
-        # Aguarda API iniciar
-        sleep 10
+        echo "Aguardando API iniciar..."
+        sleep 15
         
-        # Testa endpoint (ajuste conforme sua API)
-        curl --fail http://localhost:8081/api/wallets || exit 1
+        # Testa endpoint real (o mesmo que funciona localmente)
+        echo "Testando /api/wallets..."
+        curl --fail http://localhost:8080/api/wallets || {
+          echo "❌ Falha no teste. Logs da API:"
+          docker logs test-api
+          docker logs test-api --tail 50
+          exit 1
+        }
         
-        # Se chegou aqui, o teste passou!
         echo "✅ Imagem testada com sucesso!"
     
-    # Push da imagem (sempre, tanto PR quanto main)
+    # 🚀 Push da imagem (sempre, tanto PR quanto main)
     - name: 🚀 Push image
       run: |
         docker push ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}
@@ -111,27 +120,3 @@ jobs:
       run: |
         docker tag ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:latest
         docker push ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:latest
-  # ──────────────────────────────────────────────────────────
-  # JOB 3: ROLLBACK AUTOMÁTICO (opcional - avançado)
-  # ──────────────────────────────────────────────────────────
-  # Este job cria um PR de rollback se algo falhar na main
-  # (Descomente se quiser usar)
-  #
-  # create-rollback-pr:
-  #   runs-on: ubuntu-latest
-  #   if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   steps:
-  #   - name: 📥 Checkout code
-  #     uses: actions/checkout@v4
-  #     with:
-  #       fetch-depth: 0
-  #   
-  #   - name: 🔄 Create rollback PR
-  #     uses: peter-evans/create-pull-request@v6
-  #     with:
-  #       token: ${{ secrets.GITHUB_TOKEN }}
-  #       commit-message: "🚑 Rollback para commit anterior"
-  #       title: "🚑 Rollback automático - falha no deploy"
-  #       body: "O deploy falhou. Este PR reverte para o commit anterior."
-  #       branch: rollback-${{ github.sha }}
-  #       base: main
