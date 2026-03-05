@@ -44,13 +44,12 @@ services:
         condition: service_healthy
     networks:
       - easypicpay-network
-    # restart: unless-stopped
-    restart: no
+    restart: unless-stopped
+    # restart: no
     # Opcional: esperar postgres ficar pronto antes de iniciar
     command: >
       sh -c "
       echo 'Aguardando PostgreSQL ficar pronto...' &&
-      sleep 5 &&
       dotnet EasyPicPay.dll
       "
 

@@ -4,11 +4,8 @@ name: CI Pipeline
 # 📍 EVENTOS QUE DISPARAM O PIPELINE
 # ────────────────────────────────────────────────────────────
 on:
-  # Roda em todo pull request para a main
   pull_request:
     branches: [ main ]
-  
-  # Roda após merge na main (para buildar imagem)
   push:
     branches: [ main ]
 
@@ -23,101 +20,169 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    # Baixa o código do repositório
     - name: 📥 Checkout code
       uses: actions/checkout@v4
     
-    # Configura a versão do .NET
     - name: ⚙️ Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '10.0.x'
     
-    # Restaura pacotes NuGet
     - name: 📦 Restore dependencies
       run: dotnet restore EasyPicPay.sln
     
-    # Compila o projeto em modo Release
     - name: 🔨 Build
       run: dotnet build EasyPicPay.sln --configuration Release --no-restore
     
-    # Roda os testes (✅ Se falhar, trava o pipeline)
     - name: 🧪 Run tests
       run: dotnet test src/TestEasyPicPay/TestEasyPicPay.csproj --configuration Release --no-build --verbosity normal
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 2: BUILD, TESTE COM BANCO REAL E PUSH DA IMAGEM
+  # ──────────────────────────────────────────────────────────
+  build-and-push-image:
+    needs: build-and-test
+    runs-on: ubuntu-latest
     
-    # (Opcional) Salva os resultados dos testes como artefato
-    - name: 📊 Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()  # Roda mesmo se os testes falharem
+    # 🚀 SERVICE CONTAINERS - GitHub gerencia o PostgreSQL automaticamente
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: EasyPicPayDB
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+    
+    - name: 🔑 Login Docker Hub
+      uses: docker/login-action@v3
       with:
-        name: test-results
-        path: TestResults/
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+    
+    # Define a tag DINÂMICA baseada no tipo de evento
+    - name: 🏷️ Set image tag
+      id: tags
+      run: |
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          echo "TAG=pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
+        else
+          echo "TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
+        fi
+    
+    # Build da imagem com a tag definida
+    - name: 🏗️ Build image
+      run: |
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }} .
+    
+    # 🧪 TESTE DA IMAGEM COM BANCO DE DADOS REAL (via service container)
+    - name: 🧪 Test image with PostgreSQL
+      run: |
+        # Sobe a API usando network=host
+        docker run -d \
+          --name test-api \
+          --network host \
+          --add-host host.docker.internal:host-gateway \
+          -e ConnectionStrings__DefaultConnection="Host=host.docker.internal;Port=5432;Database=EasyPicPayDB;Username=postgres;Password=root" \
+          ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}
+        
+        echo "Aguardando API iniciar..."
+        
+        # Monitora logs
+        timeout 60 bash -c '
+          while ! docker logs test-api 2>&1 | grep -q "Application started"; do
+            echo -n "."
+            sleep 2
+          done
+        '
+        
+        echo ""
+        echo "✅ API iniciou!"
+        sleep 3
+        
+        # Testa NO IPV4 explícito (127.0.0.1) e com timeout maior
+        echo "Testando /api/wallets em 127.0.0.1:8080..."
+        
+        # Primeiro, verifica se a porta está escutando
+        echo "🔍 Verificando portas:"
+        ss -tulpn | grep 8080 || echo "Porta 8080 não encontrada"
+        
+        # Tenta curl com timeout de 10 segundos e opções extras
+        curl -v --connect-timeout 10 --retry 3 --retry-delay 2 http://127.0.0.1:8080/api/wallets || {
+          echo "❌ Falha no curl. Tentando com localhost..."
+          curl -v --connect-timeout 10 http://localhost:8080/api/wallets || {
+            echo "❌ Falha também em localhost."
+            echo "📋 Logs completos:"
+            docker logs test-api
+            exit 1
+          }
+        }
+        
+        echo "✅ Teste passou!"
+    
+    # 🚀 Push da imagem (sempre, tanto PR quanto main)
+    - name: 🚀 Push image
+      run: |
+        docker push ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}
+    
+    # Se for push na main, atualiza também a tag latest
+    - name: 🚀 Push latest (only main)
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        docker tag ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:latest
 
   # ──────────────────────────────────────────────────────────
-  # JOB 2: BUILD DA IMAGEM DOCKER (só após merge na main)
+  # JOB 3: DEPLOY NO KUBERNETES (APENAS QUANDO MERGE NA MAIN)
   # ──────────────────────────────────────────────────────────
-  # build-image:
-  #   # Só roda se for push na main E se o job anterior passou
-  #   needs: build-and-test
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   runs-on: ubuntu-latest
+  deploy-to-kubernetes:
+    needs: build-and-push-image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     
-  #   steps:
-  #   - name: 📥 Checkout code
-  #     uses: actions/checkout@v4
+    steps:
+    - name: 📥 Checkout GitOps repo
+      uses: actions/checkout@v4
+      with:
+        repository: SEU-USUARIO/picpay-gitops
+        token: ${{ secrets.GITOPS_TOKEN }}
+        path: picpay-gitops
     
-  #   # Login no Docker Hub (segredos configurados no GitHub)
-  #   - name: 🔑 Login to Docker Hub
-  #     uses: docker/login-action@v3
-  #     with:
-  #       username: ${{ secrets.DOCKER_USERNAME }}
-  #       password: ${{ secrets.DOCKER_TOKEN }}
+    - name: 🏷️ Set image tag
+      id: tags
+      run: echo "TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
     
-  #   # Build da imagem (sem push ainda - teste local)
-  #   - name: 🏗️ Build Docker image
-  #     run: |
-  #       docker build -t ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }} .
+    - name: 🔄 Update image in GitOps repo
+      run: |
+        cd picpay-gitops
+        
+        # Atualiza a imagem no rollout.yaml da produção
+        sed -i "s|image:.*|image: ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}|" \
+          apps/picpay-api/overlays/prod/rollout.yaml
+        
+        # Se existir analysis-template, atualiza também (opcional)
+        # sed -i "s|image:.*|image: ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}|" \
+        #   apps/picpay-api/overlays/prod/kustomization.yaml
+        
+        # Configura git
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        
+        # Commit e push
+        git add .
+        git commit -m "🚀 Deploy image ${{ steps.tags.outputs.TAG }} to production"
+        git push
     
-  #   # ✅ TESTE DA IMAGEM ANTES DE SUBIR
-  #   # Roda um container temporário e testa se a API sobe
-  #   - name: 🧪 Test Docker image
-  #     run: |
-  #       # Sobe container em background
-  #       docker run -d --name test-api -p 8080:80 ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }}
-  #       sleep 10  # Aguarda API iniciar
-  #       # Testa endpoint (ajuste conforme sua API)
-  #       curl --fail http://localhost:8080/api/wallets || exit 1
-  #       # Se falhar, o pipeline para aqui (não faz push)
-    
-  #   # Só faz push se o teste passou
-  #   - name: 🚀 Push Docker image
-  #     run: |
-  #       docker push ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }}
-  #       # Também atualiza a tag latest
-  #       docker tag ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:latest
-  #       docker push ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:latest
-
-  # ──────────────────────────────────────────────────────────
-  # JOB 3: ROLLBACK AUTOMÁTICO (opcional - avançado)
-  # ──────────────────────────────────────────────────────────
-  # Este job cria um PR de rollback se algo falhar na main
-  # (Descomente se quiser usar)
-  #
-  # create-rollback-pr:
-  #   runs-on: ubuntu-latest
-  #   if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   steps:
-  #   - name: 📥 Checkout code
-  #     uses: actions/checkout@v4
-  #     with:
-  #       fetch-depth: 0
-  #   
-  #   - name: 🔄 Create rollback PR
-  #     uses: peter-evans/create-pull-request@v6
-  #     with:
-  #       token: ${{ secrets.GITHUB_TOKEN }}
-  #       commit-message: "🚑 Rollback para commit anterior"
-  #       title: "🚑 Rollback automático - falha no deploy"
-  #       body: "O deploy falhou. Este PR reverte para o commit anterior."
-  #       branch: rollback-${{ github.sha }}
-  #       base: main
+    - name: ✅ Notify ArgoCD (opcional)
+      run: |
+        echo "🔄 GitOps repo updated. ArgoCD will sync automatically within 3 minutes."        
