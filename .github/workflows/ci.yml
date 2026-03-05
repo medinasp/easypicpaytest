@@ -141,3 +141,48 @@ jobs:
       run: |
         docker tag ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:latest
         docker push ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:latest
+
+  # ──────────────────────────────────────────────────────────
+  # JOB 3: DEPLOY NO KUBERNETES (APENAS QUANDO MERGE NA MAIN)
+  # ──────────────────────────────────────────────────────────
+  deploy-to-kubernetes:
+    needs: build-and-push-image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout GitOps repo
+      uses: actions/checkout@v4
+      with:
+        repository: SEU-USUARIO/picpay-gitops
+        token: ${{ secrets.GITOPS_TOKEN }}
+        path: picpay-gitops
+    
+    - name: 🏷️ Set image tag
+      id: tags
+      run: echo "TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
+    
+    - name: 🔄 Update image in GitOps repo
+      run: |
+        cd picpay-gitops
+        
+        # Atualiza a imagem no rollout.yaml da produção
+        sed -i "s|image:.*|image: ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}|" \
+          apps/picpay-api/overlays/prod/rollout.yaml
+        
+        # Se existir analysis-template, atualiza também (opcional)
+        # sed -i "s|image:.*|image: ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}|" \
+        #   apps/picpay-api/overlays/prod/kustomization.yaml
+        
+        # Configura git
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        
+        # Commit e push
+        git add .
+        git commit -m "🚀 Deploy image ${{ steps.tags.outputs.TAG }} to production"
+        git push
+    
+    - name: ✅ Notify ArgoCD (opcional)
+      run: |
+        echo "🔄 GitOps repo updated. ArgoCD will sync automatically within 3 minutes."        
