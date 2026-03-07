@@ -145,44 +145,47 @@ jobs:
   # ──────────────────────────────────────────────────────────
   # JOB 3: DEPLOY NO KUBERNETES (APENAS QUANDO MERGE NA MAIN)
   # ──────────────────────────────────────────────────────────
-  deploy-to-kubernetes:
+  # JOB 3: CRIAR PULL REQUEST NO REPO GITOPS (APENAS QUANDO PR É MERGEADO NA MAIN)
+  create-pr-on-gitops-repo:
     needs: build-and-push-image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write
+      pull-requests: write
+
     steps:
     - name: 📥 Checkout GitOps repo
       uses: actions/checkout@v4
       with:
-        repository: SEU-USUARIO/picpay-gitops
+        repository: medinasp/k8s-easy-picpay
         token: ${{ secrets.GITOPS_TOKEN }}
-        path: picpay-gitops
-    
+        path: k8s-easy-picpay
+
     - name: 🏷️ Set image tag
       id: tags
       run: echo "TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
-    
+
     - name: 🔄 Update image in GitOps repo
       run: |
-        cd picpay-gitops
-        
-        # Atualiza a imagem no rollout.yaml da produção
+        cd k8s-easy-picpay
+        # Atualiza a imagem no overlay de produção
         sed -i "s|image:.*|image: ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}|" \
           apps/picpay-api/overlays/prod/rollout.yaml
-        
-        # Se existir analysis-template, atualiza também (opcional)
-        # sed -i "s|image:.*|image: ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}|" \
-        #   apps/picpay-api/overlays/prod/kustomization.yaml
-        
-        # Configura git
-        git config user.name "GitHub Actions"
-        git config user.email "actions@github.com"
-        
-        # Commit e push
-        git add .
-        git commit -m "🚀 Deploy image ${{ steps.tags.outputs.TAG }} to production"
-        git push
-    
-    - name: ✅ Notify ArgoCD (opcional)
-      run: |
-        echo "🔄 GitOps repo updated. ArgoCD will sync automatically within 3 minutes."        
+
+    - name: ✨ Create Pull Request
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITOPS_TOKEN }}
+        path: k8s-easy-picpay
+        commit-message: "🚀 Deploy image ${{ steps.tags.outputs.TAG }} from easypicpaytest PR #${{ github.event.pull_request.number }}"
+        title: "Deploy: nova imagem ${{ steps.tags.outputs.TAG }}"
+        body: |
+          **Imagem:** `${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ steps.tags.outputs.TAG }}`
+          **Origem:** Merge do PR #${{ github.event.pull_request.number }} no repo `easypicpaytest`
+          **Autor:** @${{ github.actor }}
+
+          Este PR foi gerado automaticamente pelo CI.
+        branch: deploy-${{ steps.tags.outputs.TAG }}
+        base: main
+        delete-branch: true
