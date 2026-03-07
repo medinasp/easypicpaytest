@@ -81,8 +81,9 @@ jobs:
     - name: 🔄 Update image tag no GitOps
       run: |
         cd k8s-easy-picpay
-        sed -i "s|image:.*|image: ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }}|" \
+        sed -i "s|image: eneiasmedina/easypicpay-api:.*|image: ${{ secrets.DOCKER_USERNAME }}/easypicpay-api:${{ github.sha }}|" \
           apps/picpay-api/overlays/prod/rollout.yaml
+        git status
 
     - name: ✨ Create Pull Request no GitOps
       uses: peter-evans/create-pull-request@v6
