@@ -103,5 +103,8 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/health", () => Results.Ok("healthy"));
+app.MapGet("/ready", () => Results.Ok("ready"));
+
 app.MapControllers();
 app.Run();
