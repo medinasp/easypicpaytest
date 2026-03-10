@@ -2,59 +2,58 @@ using EasyPicPay.Web.ViewModels.Requests;
 using EasyPicPay.Web.ViewModels.Responses;
 using EasyPicPay.Application.Exceptions;
 using EasyPicPay.Application.Interfaces;
-using Microsoft.AspNetCore.Authorization; // IWalletService
+using EasyPicPay.Application.Util;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EasyPicPay.Web.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-// [Authorize]
-public class WalletController : ControllerBase
+public class WalletController(
+    IWalletService walletService,
+    ILogger<WalletController> logger) : ControllerBase
 {
-    private readonly IWalletService _walletService;
-    private readonly ILogger<WalletController> _logger;
-
-    public WalletController(IWalletService walletService,
-        ILogger<WalletController> logger)
-    {
-        _walletService = walletService;
-        _logger        = logger;
-    }
-
     /// <summary>
     /// Cria uma nova wallet.
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<CreateWalletResponse>> Create([FromBody] CreateWalletRequest request)
+    [ProducesResponseType(typeof(CreateWalletResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<CreateWalletResponse>> Create(
+        [FromBody] CreateWalletRequest request)
     {
+        // ✅ Valida ModelState (DataAnnotations)
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
         try
         {
-            var created = await _walletService.CreateWalletAsync(
+            logger.LogInformation("Criando wallet para Email: {Email}", request.Email);
+
+            var created = await walletService.CreateWalletAsync(
                 request.Name,
                 request.CpfCnpj,
                 request.Email,
                 request.Password,
                 request.UserType);
 
-            var response = new CreateWalletResponse
-            {
-                Message  = "Wallet criada com sucesso."
-            };
+            var response = new CreateWalletResponse(ConstMessages.WalletCreated);
 
-            // 201 Created + Location header que aponta para o GET da wallet
+            logger.LogInformation("Wallet criada: {WalletId}", created.Id);
+
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, response);
         }
         catch (BusinessException ex)
         {
-            // Erros de validação ou de regra de negócio vêm aqui
-            _logger.LogWarning(ex, "Validação falhou ao criar wallet");
-            return BadRequest(new { ex.Message });
+            logger.LogWarning(ex, "Erro de negócio ao criar wallet");
+            return UnprocessableEntity(new { error = ex.Message });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro inesperado ao criar wallet");
-            return StatusCode(500, "Ocorreu um erro interno.");
+            logger.LogError(ex, "Erro inesperado ao criar wallet");
+            return StatusCode(500, new { error = ConstMessages.InternalError });
         }
     }
 
@@ -62,52 +61,67 @@ public class WalletController : ControllerBase
     /// Busca uma wallet pelo seu Id.
     /// </summary>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(GetWalletByIdResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<GetWalletByIdResponse>> GetById(Guid id)
     {
-        var wallet = await _walletService.GetWalletByIdAsync(id);
-        if (wallet == null) return NotFound();
+        logger.LogInformation("Buscando wallet: {WalletId}", id);
 
-        var response = new GetWalletByIdResponse
+        var wallet = await walletService.GetWalletByIdAsync(id);
+
+        if (wallet == null)
         {
-            Name     = wallet.Name,
-            Email    = wallet.Email,
-            Balance  = wallet.Balance,
-            UserType = wallet.UserType
-        };
+            logger.LogWarning("Wallet {WalletId} não encontrada", id);
+            return NotFound(new { error = ConstMessages.WalletNotFound });
+        }
+
+        var response = new GetWalletByIdResponse(
+            wallet.Name,
+            wallet.Email,
+            wallet.Balance,
+            wallet.UserType);
 
         return Ok(response);
     }
 
     /// <summary>
-    /// Atualiza (debit ou credit) o saldo de uma wallet.
+    /// Atualiza o saldo de uma wallet.
     /// </summary>
     [HttpPatch("balance")]
+    [ProducesResponseType(typeof(UpdateWalletBalanceResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<UpdateWalletBalanceResponse>> UpdateBalance(
         [FromBody] UpdateWalletBalanceRequest request)
     {
+        // ✅ Valida ModelState
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
         try
         {
-            // Primeiro verifica se a wallet existe
-            if (!await _walletService.WalletExistsAsync(request.WalletId))
-                return NotFound(new { Message = "Wallet não encontrada." });
+            if (!await walletService.WalletExistsAsync(request.WalletId))
+            {
+                logger.LogWarning("Wallet {WalletId} não encontrada para atualização", request.WalletId);
+                return NotFound(new { error = ConstMessages.WalletNotFound });
+            }
 
-            var currentBalance = await _walletService.GetBalanceAsync(request.WalletId);
-            decimal newBalance = currentBalance + request.Amount;   // pode ser negativo (debit)
+            var currentBalance = await walletService.GetBalanceAsync(request.WalletId);
+            decimal newBalance = currentBalance + request.Amount;
 
-            // Persiste a alteração no saldo (aqui não há crédito/debit propriamente dito,
-            // apenas ajuste de campo; se precisar de lógica extra pode chamar um método
-            // do domínio como Debit/Credit)
-            // Exemplo de chamada ao domínio (se houver método no WalletEntity):
-            // await _walletService.UpdateBalanceAsync(request.WalletId, request.Amount);
+            var response = new UpdateWalletBalanceResponse(newBalance);
 
-            // Para o exemplo, apenas retornamos o novo saldo
-            var resp = new UpdateWalletBalanceResponse { NewBalance = newBalance };
-            return Ok(resp);
+            logger.LogInformation(
+                "Saldo atualizado: WalletId={WalletId}, Anterior={Old}, Novo={New}", 
+                request.WalletId, currentBalance, newBalance);
+
+            return Ok(response);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro ao atualizar saldo da wallet");
-            return StatusCode(500, "Erro interno.");
+            logger.LogError(ex, "Erro ao atualizar saldo da wallet {WalletId}", request.WalletId);
+            return StatusCode(500, new { error = ConstMessages.InternalError });
         }
     }
 }
