@@ -2,74 +2,112 @@ using EasyPicPay.Application.Interfaces;
 using EasyPicPay.Data;
 using EasyPicPay.Application.Exceptions;
 using EasyPicPay.Entities;
-using EasyPicPay.Entities.Enums;
 using Microsoft.EntityFrameworkCore;
+using EasyPicPay.Application.Util;
 
 namespace EasyPicPay.Application.Services;
 
 public class TransactionService(
     AppDbContext context,
-    ILogger<TransactionService> logger,
-    IWalletService walletService)
+    ILogger<TransactionService> logger)
     : ITransactionService
 {
     public async Task<TransactionEntity> CreateTransactionAsync(Guid payerId, Guid payeeId, decimal amount)
     {
-        await using var transactionScope = await context.Database.BeginTransactionAsync();
+        // 1. Inicia transação explícita no banco (obrigatório para FOR UPDATE funcionar)
+        // Garante que todas as operações sejam atômicas (tudo ou nada)
+        await using var dbTransaction = await context.Database.BeginTransactionAsync();
         
         try
         {
-            // 1. Validações básicas
-            if (!await walletService.WalletExistsAsync(payerId))
-                throw new BusinessException("Pagador não encontrado");
-                
-            if (!await walletService.WalletExistsAsync(payeeId))
-                throw new BusinessException("Recebedor não encontrado");
-
-            // 2. Busca wallets com lock para evitar race conditions
+            // 2. Busca e TRAVA as wallets no banco usando FOR UPDATE (Lock Pessimista)
+            // O FOR UPDATE bloqueia as linhas para outras transações até o COMMIT
+            // Outras transações que tentarem ler essas mesmas linhas ficarão ESPERANDO
             var payer = await context.Wallets
-                .FirstOrDefaultAsync(w => w.Id == payerId);
-                
+                .FromSqlRaw(
+                    "SELECT * FROM \"Wallets\" WHERE \"Id\" = {0} FOR UPDATE", 
+                    payerId
+                )
+                .FirstOrDefaultAsync();
+            
+            // 3. Busca e TRAVA a wallet do recebedor (também com FOR UPDATE)
+            // Importante: travamos AMBAS as wallets antes de qualquer validação
             var payee = await context.Wallets
-                .FirstOrDefaultAsync(w => w.Id == payeeId);
+                .FromSqlRaw(
+                    "SELECT * FROM \"Wallets\" WHERE \"Id\" = {0} FOR UPDATE", 
+                    payeeId
+                )
+                .FirstOrDefaultAsync();
 
-            if (payer == null || payee == null)
-                throw new BusinessException("Uma das wallets não foi encontrada");
+            // 4. Validações básicas de existência
+            // Agora que as linhas estão travadas, podemos validar com segurança
+            if (payer == null)
+                throw new BusinessException(ConstMessages.PayerNotFound);
+            
+            if (payee == null)
+                throw new BusinessException(ConstMessages.PayeeNotFound);
 
-            // 3. Valida regras de negócio
+            // 5. Validações de regras de negócio
+            // Como as linhas estão travadas, temos garantia que os dados não mudaram
             if (!payer.CanSendMoney())
-                throw new BusinessException("Lojistas não podem enviar dinheiro");
-                
+                throw new BusinessException(ConstMessages.MerchantCannotSend);
+            
             if (payer.Balance < amount)
-                throw new BusinessException("Saldo insuficiente");
+                throw new BusinessException(ConstMessages.InsufficientBalance);
 
-            // 4. Cria transação
+            // 6. Cria a entidade de transação
+            // Registra a operação que será realizada
             var transaction = new TransactionEntity(payerId, payeeId, amount);
             context.Transactions.Add(transaction);
 
-            // 5. Debita e credita (ainda não persiste)
-            payer.Debit(amount);
-            payee.Credit(amount);
+            // 7. Atualiza os saldos na memória
+            // As entidades ainda estão sendo rastreadas pelo EF Core
+            payer.Debit(amount);  // Debita do pagador
+            payee.Credit(amount); // Credita ao recebedor
 
-            // 6. Persiste tudo atomicamente
+            // 8. Persiste todas as mudanças atomicamente
+            // SaveChangesAsync executa todos os INSERTs e UPDATEs em uma única operação
+            // Se qualquer operação falhar, nada é salvo (atomicidade)
             await context.SaveChangesAsync();
-            await transactionScope.CommitAsync();
             
-            logger.LogInformation("Transação {TransactionId} criada com sucesso", transaction.Id);
+            // 9. Confirma a transação e LIBERA os locks
+            // COMMIT libera as linhas travadas para outras transações
+            // Só após o COMMIT as mudanças ficam visíveis para outras transações
+            await dbTransaction.CommitAsync();
+
+            logger.LogInformation(
+                "Transação {TransactionId} criada com sucesso. Pagador: {PayerId}, Recebedor: {PayeeId}, Valor: {Amount}", 
+                transaction.Id, payerId, payeeId, amount
+            );
+            
             return transaction;
         }
         catch (Exception ex)
         {
-            await transactionScope.RollbackAsync();
-            logger.LogError(ex, "Erro na transação entre {PayerId} e {PayeeId}", payerId, payeeId);
+            // 10. Em caso de erro, desfaz TUDO e libera os locks
+            // ROLLBACK descarta todas as mudanças e libera as linhas travadas
+            // Garante que o banco volta ao estado anterior à transação
+            await dbTransaction.RollbackAsync();
             
-            if (ex is BusinessException) throw;
-            throw new BusinessException("Erro ao processar transação");
+            logger.LogError(
+                ex, 
+                "Erro ao criar transação entre Pagador: {PayerId} e Recebedor: {PayeeId}. Valor: {Amount}", 
+                payerId, payeeId, amount
+            );
+            
+            // 11. Repropaga BusinessException (erros de validação)
+            // Outros erros são encapsulados em BusinessException genérica
+            if (ex is BusinessException)
+                throw;
+            
+            throw new BusinessException(ConstMessages.InternalError);
         }
     }
 
     public async Task<TransactionEntity?> GetTransactionByIdAsync(Guid id)
     {
+        // Busca transação com dados relacionados (Payer e Payee)
+        // AsNoTracking melhora performance pois não precisa rastrear mudanças
         return await context.Transactions
             .Include(t => t.Payer)
             .Include(t => t.Payee)

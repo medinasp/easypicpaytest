@@ -1,6 +1,6 @@
-namespace EasyPicPay.Web.ViewModels;
+namespace EasyPicPay.Web.ViewModels.Responses;
 
-public record TransactionDto(
+public record TransactionResponse(
     Guid Id,
     Guid PayerId,
     Guid PayeeId,
