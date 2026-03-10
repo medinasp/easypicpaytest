@@ -37,10 +37,7 @@ public class WalletController : ControllerBase
                 request.Password,
                 request.UserType);
 
-            var response = new CreateWalletResponse
-            {
-                Message  = "Wallet criada com sucesso."
-            };
+            var response = new CreateWalletResponse("Wallet criada com sucesso.");
 
             // 201 Created + Location header que aponta para o GET da wallet
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, response);
@@ -67,13 +64,11 @@ public class WalletController : ControllerBase
         var wallet = await _walletService.GetWalletByIdAsync(id);
         if (wallet == null) return NotFound();
 
-        var response = new GetWalletByIdResponse
-        {
-            Name     = wallet.Name,
-            Email    = wallet.Email,
-            Balance  = wallet.Balance,
-            UserType = wallet.UserType
-        };
+        var response = new GetWalletByIdResponse(
+            wallet.Name,
+            wallet.Email,
+            wallet.Balance,
+            wallet.UserType);
 
         return Ok(response);
     }
@@ -92,16 +87,9 @@ public class WalletController : ControllerBase
                 return NotFound(new { Message = "Wallet não encontrada." });
 
             var currentBalance = await _walletService.GetBalanceAsync(request.WalletId);
-            decimal newBalance = currentBalance + request.Amount;   // pode ser negativo (debit)
+            decimal newBalance = currentBalance + request.Amount;
 
-            // Persiste a alteração no saldo (aqui não há crédito/debit propriamente dito,
-            // apenas ajuste de campo; se precisar de lógica extra pode chamar um método
-            // do domínio como Debit/Credit)
-            // Exemplo de chamada ao domínio (se houver método no WalletEntity):
-            // await _walletService.UpdateBalanceAsync(request.WalletId, request.Amount);
-
-            // Para o exemplo, apenas retornamos o novo saldo
-            var resp = new UpdateWalletBalanceResponse { NewBalance = newBalance };
+            var resp = new UpdateWalletBalanceResponse (newBalance);
             return Ok(resp);
         }
         catch (Exception ex)

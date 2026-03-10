@@ -11,7 +11,6 @@ namespace EasyPicPay.Application.Services;
 
 public class AuthService(
     AppDbContext db,
-    // REMOVA: IPasswordHasher<WalletEntity> hasher,  ← não precisa mais
     IConfiguration cfg)
     : IAuthService
 {
@@ -22,14 +21,11 @@ public class AuthService(
         if (user == null)
             throw new SecurityException("Credenciais inválidas.");
 
-        // TROCA — de IPasswordHasher para BCrypt
         var senhaCorreta = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
         if (!senhaCorreta)
             throw new SecurityException("Credenciais inválidas.");
         
         // senha digitada "MinhaSenh@123" + hash do banco → BCrypt.Verify() → true ou false
-        // O BCrypt não "descriptografa" o hash — ele refaz o processo de hash na senha digitada e compara com o que está salvo.        
-
         // MANTÉM — geração do JWT inteiramente igual
         var jwtKey = cfg["Jwt:Key"] 
                      ?? throw new InvalidOperationException("Jwt:Key não configurada no appsettings.json");

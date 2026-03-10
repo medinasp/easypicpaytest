@@ -3,7 +3,6 @@ using EasyPicPay.Application.Interfaces;
 using EasyPicPay.Web.ViewModels.Requests;
 using EasyPicPay.Web.ViewModels.Responses;
 using EasyPicPay.Web.ViewModels;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EasyPicPay.Web.Controllers;
@@ -23,31 +22,21 @@ public class TransactionController(
     public async Task<ActionResult<CreateTransactionResponse>> Create(
         [FromBody] CreateTransactionRequest request)
     {
-        try
-        {
+        logger.LogInformation("Criando transação para PayerId: {PayerId}, PayeeId: {PayeeId}", request.PayerId, request.PayeeId);
+
             var created = await service.CreateTransactionAsync(
                 request.PayerId,
                 request.PayeeId,
                 request.Amount);
 
             var response = new CreateTransactionResponse
-            {
-                TransactionId = created.Id,
-                Message       = "Transação criada com sucesso."
-            };
+            (
+                created.Id,
+                "Transação criada com sucesso."
+            );
 
-            return CreatedAtAction(nameof(GetById), new { id = created.Id }, response);
-        }
-        catch (BusinessException ex)
-        {
-            logger.LogWarning(ex, "Validação de domínio");
-            return BadRequest(new { ex.Message });
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Erro inesperado");
-            return StatusCode(500, "Erro interno");
-        }
+        logger.LogInformation("Transação criada com ID: {Id}", created.Id);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, response);
     }
 
     /// <summary>
@@ -56,6 +45,8 @@ public class TransactionController(
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<TransactionDto>> GetById(Guid id)
     {
+        logger.LogInformation("Buscando transação com ID: {Id}", id);
+        
         var entity = await service.GetTransactionByIdAsync(id);
 
         if (entity == null) return NotFound();
