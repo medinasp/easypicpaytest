@@ -33,7 +33,7 @@ public class Tests
         _walletLogger = NullLogger<WalletService>.Instance;
         _transactionLogger = NullLogger<TransactionService>.Instance;
         _walletService = new WalletService(_context, _walletLogger);
-        _transactionService = new TransactionService(_context, _transactionLogger, _walletService);
+        _transactionService = new TransactionService(_context, _transactionLogger);
     }    
 
     [TearDown]
