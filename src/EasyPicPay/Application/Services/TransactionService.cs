@@ -22,7 +22,6 @@ public class TransactionService(
         {
             // 2. Busca e TRAVA as wallets no banco usando FOR UPDATE (Lock Pessimista)
             // O FOR UPDATE bloqueia as linhas para outras transações até o COMMIT
-            // Outras transações que tentarem ler essas mesmas linhas ficarão ESPERANDO
             var payer = await context.Wallets
                 .FromSqlRaw(
                     "SELECT * FROM \"Wallets\" WHERE \"Id\" = {0} FOR UPDATE", 
@@ -67,12 +66,9 @@ public class TransactionService(
 
             // 8. Persiste todas as mudanças atomicamente
             // SaveChangesAsync executa todos os INSERTs e UPDATEs em uma única operação
-            // Se qualquer operação falhar, nada é salvo (atomicidade)
             await context.SaveChangesAsync();
             
             // 9. Confirma a transação e LIBERA os locks
-            // COMMIT libera as linhas travadas para outras transações
-            // Só após o COMMIT as mudanças ficam visíveis para outras transações
             await dbTransaction.CommitAsync();
 
             logger.LogInformation(

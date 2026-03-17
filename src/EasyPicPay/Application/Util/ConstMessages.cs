@@ -2,9 +2,6 @@ namespace EasyPicPay.Application.Util;
 
 public static class ConstMessages
 {
-    // Erros de validação (400)
-    // public const string InvalidRequest = "Requisição inválida.";
-    
     // Transaction
     public const string InsufficientBalance = "Saldo insuficiente.";
     public const string PayerNotFound = "Pagador não encontrado.";

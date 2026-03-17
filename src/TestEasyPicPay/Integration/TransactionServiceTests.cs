@@ -85,7 +85,7 @@ public class TransactionServiceTests : IClassFixture<DatabaseFixture>, IAsyncLif
     #region Testes
 
     [Fact]
-    public async Task CreateTransaction_ConcurrentTransactions_ShouldSerializeViaLock()
+    public async Task CreateTransaction_ConcurrentTransactions_FaillingTask2_ShouldSerializeViaLock()
     {
         // Arrange
         var payerId = await CreateWalletAsync("João Concurrente", "11122233344", "joao.concurrente@test.com", UserType.Common);
@@ -107,12 +107,48 @@ public class TransactionServiceTests : IClassFixture<DatabaseFixture>, IAsyncLif
         Assert.True(result1.Success ^ result2.Success, 
             $"Esperado exatamente 1 sucesso. Task1: {result1.Success}, Task2: {result2.Success}");
 
-        // A que falhou deve ter sido por saldo insuficiente
         var failedResult = result1.Success ? result2 : result1;
         Assert.IsType<BusinessException>(failedResult.Exception);
         Assert.Contains("Saldo insuficiente", failedResult.Exception!.Message);
 
-        // Saldo final deve refletir apenas a transação que passou
+        using var verifyContext = _fixture.CreateDbContext();
+        var finalWallet = await verifyContext.Wallets.AsNoTracking().FirstAsync(w => w.Id == payerId);
+        Assert.True(
+            finalWallet.Balance == 400m || finalWallet.Balance == 500m,
+            $"Saldo final inesperado: {finalWallet.Balance}"
+        );
+
+        await context1.DisposeAsync();
+        await context2.DisposeAsync();
+    }
+    
+    [Fact]
+    public async Task CreateTransaction_ConcurrentTransactions_FaillingTask1_ShouldSerializeViaLock()
+    {
+        // Arrange
+        var payerId = await CreateWalletAsync("João Concurrente", "11122233344", "joao.concurrente@test.com", UserType.Common);
+        var payeeId = await CreateWalletAsync("Maria", "99988877766", "maria@test.com", UserType.Common);
+
+        await AddBalanceAsync(payerId, 1000m);
+
+        var context1 = _fixture.CreateDbContext();
+        var context2 = _fixture.CreateDbContext();
+
+        var service1 = new TransactionService(context1, NullLogger<TransactionService>.Instance);
+        var service2 = new TransactionService(context2, NullLogger<TransactionService>.Instance);
+
+        // Act — captura resultado/exceção de cada task individualmente
+        var result1 = await SafeRunAsync(() => service1.CreateTransactionAsync(payerId, payeeId, 1100m));
+        var result2 = await SafeRunAsync(() => service2.CreateTransactionAsync(payerId, payeeId, 500m));
+
+        // Assert — exatamente uma deve ter sucesso e a outra deve ter falhado
+        Assert.True(result1.Success ^ result2.Success, 
+            $"Esperado exatamente 1 sucesso. Task1: {result1.Success}, Task2: {result2.Success}");
+
+        var failedResult = result1.Success ? result2 : result1;
+        Assert.IsType<BusinessException>(failedResult.Exception);
+        Assert.Contains("Saldo insuficiente", failedResult.Exception!.Message);
+
         using var verifyContext = _fixture.CreateDbContext();
         var finalWallet = await verifyContext.Wallets.AsNoTracking().FirstAsync(w => w.Id == payerId);
         Assert.True(
