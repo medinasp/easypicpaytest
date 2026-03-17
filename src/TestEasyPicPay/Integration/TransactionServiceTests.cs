@@ -107,12 +107,10 @@ public class TransactionServiceTests : IClassFixture<DatabaseFixture>, IAsyncLif
         Assert.True(result1.Success ^ result2.Success, 
             $"Esperado exatamente 1 sucesso. Task1: {result1.Success}, Task2: {result2.Success}");
 
-        // A que falhou deve ter sido por saldo insuficiente
         var failedResult = result1.Success ? result2 : result1;
         Assert.IsType<BusinessException>(failedResult.Exception);
         Assert.Contains("Saldo insuficiente", failedResult.Exception!.Message);
 
-        // Saldo final deve refletir apenas a transação que passou
         using var verifyContext = _fixture.CreateDbContext();
         var finalWallet = await verifyContext.Wallets.AsNoTracking().FirstAsync(w => w.Id == payerId);
         Assert.True(
@@ -147,12 +145,10 @@ public class TransactionServiceTests : IClassFixture<DatabaseFixture>, IAsyncLif
         Assert.True(result1.Success ^ result2.Success, 
             $"Esperado exatamente 1 sucesso. Task1: {result1.Success}, Task2: {result2.Success}");
 
-        // A que falhou deve ter sido por saldo insuficiente
         var failedResult = result1.Success ? result2 : result1;
         Assert.IsType<BusinessException>(failedResult.Exception);
         Assert.Contains("Saldo insuficiente", failedResult.Exception!.Message);
 
-        // Saldo final deve refletir apenas a transação que passou
         using var verifyContext = _fixture.CreateDbContext();
         var finalWallet = await verifyContext.Wallets.AsNoTracking().FirstAsync(w => w.Id == payerId);
         Assert.True(
